@@ -1,0 +1,27 @@
+[package]
+name = "vwire-filter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+aya = "0.12"
+aya-ebpf-cty = "0.2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.5"
+futures = "0.3"
+log = "0.4"
+env_logger = "0.10"
+clap = { version = "4.4", features = ["derive"] }
+aho-corasick = "1.1"  # Aho-Corasick 自動機算法
+
+[build-dependencies]
+aya-build = "0.1"
+
+[[bin]]
+name = "vwire-filter"
+path = "src/main.rs"
+
+[dev-dependencies]
+tokio-test = "0.4"
