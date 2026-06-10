@@ -1,6 +1,6 @@
 use crate::config::Config;
 use anyhow::Result;
-use aho_corasick::{AhoCorasick, MatchKind};
+use aho_corasick::AhoCorasick;
 use log::{info, debug};
 
 /// 廣告規則匹配引擎

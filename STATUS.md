@@ -1,232 +1,219 @@
-# Vwire - eBPF/XDP 虛擬導線廣告過濾系統
+# Vwire 開發狀態
 
-## ✅ 已完成 (PoC 版本)
+**最後更新**: 2026-06-10  
+**版本**: v0.2.0
 
-### Userspace 廣告過濾引擎
+---
 
-- [x] **Aho-Corasick 多模式匹配引擎**
-  - 集成 `aho-corasick` crate
-  - 支援高效域名和 URL 路徑匹配
-  - O(n) 時間複雜度，適合大规模規則庫
+## ✅ 已完成 (v0.2.0)
 
-- [x] **規則管理系統**
-  - 黑名單：12 條預設廣告規則
-  - 白名單：5 條常見網站放行規則
-  - 易於擴展的規則添加接口
+### 核心架構完成
 
-- [x] **互動演示模式**
-  - 命令行互動界面
-  - 實時統計信息反饋
-  - 攔截率計算
+- [x] **完整專案結構**
+  - ✅ Userspace 主程序 (支持演示模式和生產模式)
+  - ✅ eBPF XDP 程序框架 (支援重定向到 AF_XDP)
+  - ✅ HTTP 請求解析器模塊
+  - ✅ AF_XDP Socket 框架 (待完整實現)
 
-- [x] **統計監控**
-  - 總請求數追蹤
-  - 攔截/放行計數
-  - 攔截率 percentage 計算
+- [x] **廣告過濾引擎**
+  - ✅ Aho-Corasick 多模式匹配算法
+  - ✅ 12 條內建廣告規則
+  - ✅ 5 條白名單規則
+  - ✅ 實時統計信息 (總請求/攔截數/攔截率)
+  - ✅ 支持域名和 URL 路徑匹配
+
+- [x] **HTTP 解析器** (`src/http_parser.rs`)
+  - ✅ HTTP 請求行解析 (METHOD, PATH)
+  - ✅ HTTP Headers 解析
+  - ✅ Host header 提取
+  - ✅ HTTP 204/404 響應構造
+  - ✅ 單元測試覆蓋
+
+- [x] **XDP 程序** (`ebpf/src/main.rs`)
+  - ✅ 以太網/IP/TCP header 解析
+  - ✅ Port 80 (HTTP) 識別
+  - ✅ 白名單 IP bypass 機制 (BYPASS_MAP)
+  - ✅ AF_XDP socket 重定向 (XDP_REDIRECT)
+  - ✅ 統計信息收集 (per-CPU)
+  - ✅ 全旁路模式支持 (Watchdog 控制)
+
+- [x] **監控與維護**
+  - ✅ Watchdog 進程框架
+  - ✅ 健康檢查機制
+  - ✅ 优雅關閉支持
+
+- [x] **文檔系統**
+  - ✅ README.md - 專案介紹
+  - ✅ BUILDING.md - 編譯指南
+  - ✅ ROADMAP.md - 開發路線圖
+  - ✅ STATUS.md - 當前進度
+  - ✅ PUSH_INSTRUCTIONS.md - 推送指南
 
 ### 測試結果
 
 ```bash
-$ echo -e "https://ads.example.com/get_ads\nhttps://google.com/search\nhttps://doubleclick.net/banner\nq" | ./vwire-filter
+# 演示模式測試
+$ ./target/release/vwire-filter --demo
 
-[INFO] 🚀 啟動 Vwire 廣告過濾系統
-[INFO] 🔧 初始化廣告過濾引擎...
-[INFO]   ✓ 已加載 12 條廣告規則
-[INFO]   ✓ 已加載 5 條白名單規則
+URL> https://doubleclick.net/ads/banner
+  ❌ 廣告 - 已攔截 (HTTP 204)
 
-URL> ❌ 廣告 - 已攔截          (ads.example.com/get_ads)
-URL> ✓ 正常內容 - 放行          (google.com/search)
-URL> ❌ 廣告 - 已攔截          (doubleclick.net/banner)
+URL> https://github.com/antika-te
+  ✓ 正常內容 - 放行
 
 📊 過濾統計:
-  總請求數：3
-  攔截廣告：2
+  總請求數：2
+  攔截廣告：1
   放行請求：1
-  攔截率：66.67%
+  攔截率：50.00%
 ```
 
-## 🔲 待完成 (下一步開發)
+**編譯狀態**: ✅ Release 編譯成功 (26 warnings, 0 errors)
 
-### eBPF XDP 程序
+---
 
-- [ ] **XDP 流量分類**
-  - 以太網/ IP / TCP header 解析
-  - Port 80 (HTTP) 識別
-  - Port 443 (HTTPS) 識別 (階段 3)
+## 🔲 開發中 (v0.2.x)
 
-- [ ] **AF_XDP 零拷貝通道**
-  - XDP_UMEM 配置
-  - RX/TX ring buffer 設置
-  - Kernel ↔ Userspace 高效傳輸
+### 階段 1: HTTP 明文過濾 (进行中)
 
-- [ ] **流量重定向**
-  - XDP_REDIRECT 動作
-  - BPF_MAP_TYPE_DEVMAP 配置
-  - 非 HTTP 流量 bypass
+進度：███████░░░ 70%
 
-### HTTPS MITM (階段 3)
+- [x] XDP 程序開發
+- [x] AF_XDP Socket 框架
+- [ ] AF_XDP Socket 完整實現 (需要 libc socket API)
+- [x] HTTP 請求解析器
+- [ ] HTTP 響應注入 (204 攔截)
+- [ ] 完整流量處理循環
 
-- [ ] **TLS 代理引擎**
-  - tokio-rustls 集成
-  - 動態證書生成 (rcgen)
-  - ClientHello SNI 提取
+**當前阻礙**:
+- AF_XDP socket 需要實際調用 libc socket()/bind()/setsockopt()
+- 需要 root 權限和真實網絡接口測試
 
-- [ ] **內容過濾**
-  - HTML 響應體修改
-  - CSS 注入
-  - JavaScript 廣告替換
+---
 
-### 性能優化
+## 📋 待開發 (v0.3.0+)
 
-- [ ] **白名單 bypass map**
-  - eBPF HASH map 實現
-  - Userspace 動態更新
-  - 亞微秒級匹配
+### 階段 2: 性能優化 (計劃中)
 
-- [ ] **Watchdog 監控**
-  - Heart beat 機制
-  - 崩潰自動恢復
-  - 透傳模式切換
+- [ ] 動態 Bypass Map 更新
+- [ ] 性能基準測試 (pktgen)
+- [ ] 10Gbps 吞吐量優化
+- [ ] CPU 使用率分析
 
-## 快速開始
+### 階段 3: HTTPS MITM (遠景)
+
+- [ ] TLS Proxy 引擎 (tokio-rustls)
+- [ ] 動態證書生成 (rcgen)
+- [ ] SNI 提取 (eBPF)
+- [ ] HTML 內容注入
+- [ ] SSL Pinning 繞過策略
+
+### 階段 4: 產品化 (遠景)
+
+- [ ] 規則自動更新 (EasyList 訂閱)
+- [ ] Prometheus Metrics 導出
+- [ ] Grafana 儀表板
+- [ ] Docker 容器化
+- [ ] systemd 服務註冊
+
+---
+
+## 技術債
+
+1. **AF_XDP Socket 實現**
+   - 需要實際調用 POSIX socket API
+   - 需要配置 XDP_UMEM 和 ring buffers
+   - 優先級：高
+
+2. **eBPF Map 初始化**
+   - BYPASS_MAP 需要 userspace 填充初始數據
+   - 需要實現 map update API
+   - 優先級：中
+
+3. **錯誤處理**
+   - 部分 TODO 需要完善錯誤處理
+   - 需要添加重試邏輯
+   - 優先級：中
+
+---
+
+## 性能指標 (目標 vs 實際)
+
+| 指標 | v0.1 PoC | v0.2 (當前) | v0.3 目標 |
+|------|---------|------------|----------|
+| **編譯狀態** | ✅ | ✅ | ✅ |
+| **演示模式** | ✅ | ✅ | ✅ |
+| **HTTP 攔截** | ❌ | 🔲 進行中 | ✅ |
+| **AF_XDP** | ❌ | 🔲 框架完成 | ✅ |
+| **吞吐量** | N/A | N/A | 10 Gbps |
+| **延遲** | N/A | N/A | < 1ms |
+
+---
+
+## 已知問題
+
+1. eBPF 程序需要單獨編譯 (bpfel-unknown-none target)
+2. AF_XDP socket 需要 root 權限
+3. 實際流量處理需要真實網絡接口
+
+---
+
+## 下一步行動
+
+### 本週 (階段 1 衝刺)
+
+1. ✅ 完成 HTTP 解析器單元測試
+2. ✅ 完善 XDP 程序 header 解析
+3. 🔲 實現 AF_XDP socket 完整功能
+4. 🔲 集成 HTTP 204 響應注入
+5. 🔲 端到端測試 (HTTP 請求 → 攔截 → 響應)
+
+### 下週 (性能優化)
+
+1. 🔲 編譯優化 (LTO, codegen-units)
+2. 🔲 性能基準測試
+3. 🔲 白名單動態更新機制
+
+---
+
+## 編譯與運行
 
 ### 編譯
 
 ```bash
-# 安裝 Rust (如果未安裝)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-
-# 編譯
-cd vwire-filter
+# Userspace
 cargo build --release
+
+# eBPF (需要 LLVM 和 bpf target)
+cd ebpf
+cargo build --target bpfel-unknown-none -Z build-std=core --release
 ```
 
-### 運行演示
+### 運行
 
 ```bash
-# 互動模式
-./target/release/vwire-filter
+# 演示模式
+./target/release/vwire-filter --demo
 
-# 調試模式 (詳細日誌)
-./target/release/vwire-filter --debug
+# 生產模式 (需要 root 和 eBPF 程序)
+sudo ./target/release/vwire-filter --interface eth0 --debug
 ```
-
-### 測試規則
-
-```bash
-# 批量測試
-echo -e "https://doubleclick.net/ads\nhttps://youtube.com/watch\nhttps://adserver.com/tracker" | ./target/release/vwire-filter
-```
-
-## 技術棧
-
-| 組件 | 技術 | 說明 |
-|------|------|------|
-| **Userspace** | Rust + Tokio | 異步網絡編程 |
-| **eBPF** | Aya framework | Rust eBPF 框架 |
-| **匹配算法** | Aho-Corasick | 多模式匹配 |
-| **TLS** | tokio-rustls | (階段 3) |
-| **證書生成** | rcgen | (階段 3) |
-
-## 架構圖
-
-```
-┌─────────────────────────────────────────┐
-│          網路接口 (eth0)                 │
-└─────────────────┬───────────────────────┘
-                  │
-                  ▼
-         ┌─────────────────┐
-         │   XDP Program   │ ← eBPF (kernel space)
-         │  (Port 識別/分流)│
-         └───────┬─────────┘
-                 │
-        ┌────────┴────────┐
-        │                 │
-        ▼                 ▼
-  ┌──────────┐    ┌──────────────┐
-  │ Fastpath │    │  Slowpath    │
-  │ 非 HTTP   │    │  HTTP (80)   │
-  │ 直接放行  │    │  AF_XDP      │
-  └──────────┘    └───────┬───────┘
-                          │
-                          ▼
-                 ┌─────────────────┐
-                 │  Userspace      │
-                 │  Aho-Corasick   │
-                 │  規則匹配        │
-                 └─────────────────┘
-```
-
-## 規則格式
-
-### 黑名單規則類型
-
-1. **域名匹配**: `doubleclick.net`, `googleadservices.com`
-2. **路徑匹配**: `/ads/`, `/get_ads`, `/banner?`
-3. **關鍵字匹配**: `adservice`, `adtracker`, `analytics`
-
-### 白名單規則
-
-- `google.com` (搜索)
-- `youtube.com` (影片)
-- `github.com` (開發)
-- `netflix.com` (串流)
-
-## 性能指標 (目標)
-
-| 指標 | 階段 1 (HTTP) | 階段 2 (優化) | 階段 3 (HTTPS) |
-|------|-------------|-------------|---------------|
-| **吞吐量** | 1 Gbps | 10 Gbps | 2 Gbps |
-| **延遲** | < 1ms | < 100μs | < 5ms |
-| **CPU 使用率** | < 20% | < 10% | < 50% |
-| **內存占用** | < 100MB | < 50MB | < 500MB |
-
-## 下一步行動
-
-1. **編譯 eBPF 程序**
-   - 安裝 LLVM 和 bpf 工具鏈
-   - 編譯 `ebpf/src/main.rs`
-   - 測試 XDP 程序加載
-
-2. **實現 AF_XDP**
-   - 建立 socket
-   - 實現零拷貝接收循環
-   - HTTP 請求解析
-
-3. **HTTP 響應注入**
-   - HTTP 204 攔截響應
-   - 頭部構造
-   - XDP_TX 發送
-
-## 參考資源
-
-- [Aya Book](https://aya-rs.dev/book/) - Rust eBPF 權威指南
-- [XDP Project](https://www.xdp-project.org/) - XDP 技術資源
-- [EasyList](https://easylist.to/) - 廣告過濾規則訂閱
-- [Aho-Corasick Algorithm](https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm) - 多模式匹配算法
-
-## 商用潛力
-
-### 優勢
-
-1. **L2 層過濾**: 比 DNS 攔截更難繞過
-2. **HTTPS 解密**: 適配現代加密流量
-3. **零拷貝架構**: 亞微秒級延遲
-4. **Rust 安全性**: 無內存安全問題
-
-### 應用場景
-
-- 企業廣告過濾網關
-- ISP 級別內容過濾
-- 學校/圖書館網絡管理
-- 家庭路由器固件
 
 ---
 
-**狀態**: PoC 原型完成 ✓
-**下一里程碑**: eBPF XDP 程序編譯與 AF_XDP 集成
-**預計時間**: 1-2 週
+## 代碼統計
 
-✊ Let's code!
+```
+Files: 17
+Lines of Code: ~2,500
+Rust Files: 6
+Documentation: 6
+```
+
+---
+
+**專案狀態**: 階段 1 開發中 (70% 完成)  
+**下一步**: 實現 AF_XDP socket 完整功能和 HTTP 響應注入  
+**預計完成**: 1-2 週
+
+✊ Keep coding!
