@@ -40,8 +40,8 @@ struct Args {
     demo: bool,
 
     /// 導出 CA 證書
-    #[arg(long)]
-    export_ca_cert: bool,
+    #[arg(long, default_value = "")]
+    export_ca_cert: String,
 
     /// 啟用 HTTPS 過濾
     #[arg(long, default_value = "false")]
@@ -62,6 +62,18 @@ async fn main() -> Result<()> {
         ).init();
     }
 
+    // 檢查是否需要導出 CA 證書
+    if !args.export_ca_cert.is_empty() {
+        export_ca_cert(&args.export_ca_cert)?;
+        return Ok(());
+    }
+    
+    // 如果啟用 HTTPS，自動導出證書
+    if args.https {
+        export_ca_cert("vwire-ca.crt")?;
+        return Ok(());
+    }
+    
     info!("🚀 啟動 Vwire 廣告過濾系統 v0.3.0");
     info!("  網路接口：{}", args.interface);
     info!("  運行模式：{}", if args.demo { "演示模式" } else { "生產模式" });
@@ -70,8 +82,8 @@ async fn main() -> Result<()> {
     }
 
     // 檢查是否需要導出 CA 證書
-    if args.export_ca_cert {
-        export_ca_cert()?;
+    if !args.export_ca_cert.is_empty() {
+        export_ca_cert(&args.export_ca_cert)?;
         return Ok(());
     }
 
@@ -259,12 +271,16 @@ async fn run_watchdog(shutdown: Arc<Notify>) {
     info!("Watchdog: 已停止");
 }
 
-fn export_ca_cert() -> Result<()> {
+fn export_ca_cert(path: &str) -> Result<()> {
     let proxy = HttpsProxy::new()?;
-    let ca_pem = proxy.get_ca_cert_pem();
     
-    let cert_path = "vwire-ca.crt";
-    std::fs::write(cert_path, ca_pem.as_bytes())?;
+    let cert_path = if path.is_empty() {
+        "vwire-ca.crt"
+    } else {
+        path
+    };
+    
+    proxy.export_ca_cert(cert_path)?;
     
     info!("✅ CA 證書已導出到 {}", cert_path);
     info!("");
