@@ -310,16 +310,18 @@ async fn run_traffic_processor_test(
         info!("測試請求 #{}", i + 1);
         
         match processor.process_http_request(request, filter_engine.clone()).await {
-            Some(response) => {
-                // 已攔截
+            traffic_processor::ProcessResult::Blocked(response) => {
                 if response.starts_with(b"HTTP/1.1 204") {
                     info!("  ❌ 廣告已攔截 (HTTP 204 No Content)");
                 } else {
                     info!("  ❌ 廣告已攔截 (其他響應)");
                 }
             }
-            None => {
+            traffic_processor::ProcessResult::Forward => {
                 info!("  ✓ 正常內容 - 需要轉發到後端");
+            }
+            traffic_processor::ProcessResult::Forwarded(_) => {
+                info!("  ✓ 已轉發到後端");
             }
         }
     }
