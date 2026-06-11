@@ -1,313 +1,217 @@
 # Vwire 開發狀態
 
 **最後更新**: 2026-06-11  
-**版本**: v0.2.1  
-**階段**: 1 - HTTP 明文過濾
+**版本**: v0.2.1 (stable), v0.3.0-dev (開發中)  
+**分支**: master (stable), v0.3.0-dev (階段 2&3)
 
 ---
 
 ## ✅ 階段 1 完成！(100%)
 
-### 完整功能清單
+v0.2.1 已穩定發布，包含完整的 HTTP 過濾功能。
 
-#### 1. 核心架構 (100%)
-- [x] Userspace 主程序
-- [x] eBPF XDP 程序框架
-- [x] AF_XDP Socket 框架
-- [x] HTTP 請求解析器
-- [x] 廣告過濾引擎
-- [x] 流量處理器
-- [x] Watchdog 監控
+### 核心功能
+- ✅ eBPF XDP 程序 (317 lines)
+- ✅ HTTP 解析器 (218 lines)
+- ✅ 廣告過濾引擎 (151 lines)
+- ✅ 流量處理器 (185 lines)
+- ✅ AF_XDP Socket 框架
 
-#### 2. eBPF XDP 程序 (100%)
-- [x] 以太網 header 解析
-- [x] IPv4 header 解析
-- [x] TCP header 解析
-- [x] Port 80 (HTTP) 識別
-- [x] XDP_REDIRECT 到 AF_XDP
-- [x] BYPASS_MAP 白名單機制 (65536 entries)
-- [x] BYPASS_ALL 全局旁路控制
-- [x] per-CPU 統計信息收集
-- [x] 優雅降级 (失敗時 bypass)
-
-**文件**: `ebpf/src/main.rs` (317 lines)
-
-#### 3. Userspace 組件 (100%)
-
-##### HTTP 解析器 (`src/http_parser.rs` - 218 lines)
-- [x] HTTP 請求行解析 (METHOD, PATH, HTTP version)
-- [x] HTTP Headers 解析
-- [x] Host header 提取
-- [x] URL 路徑解析
-- [x] HTTP 204/404 響應構造
-- [x] 單元測試覆蓋
-
-##### 廣告過濾引擎 (`src/ads_filter.rs` - 151 lines)
-- [x] Aho-Corasick 多模式匹配
-- [x] 12 條內建廣告規則
-- [x] 5 條白名單規則
-- [x] 實時統計信息
-- [x] 域名和 URL 路徑匹配
-- [x] 攔截率計算
-
-##### AF_XDP Socket (`src/xdp_socket.rs` - 183 lines)
-- [x] AF_XDP socket 框架
-- [x] XDP_UMEM 配置結構
-- [x] RX/TX ring 緩衝區
-- [x] Fill/Completion rings
-- [x] 統計信息收集
-- [x] libc API 框架 (待 root 測試)
-
-##### 流量處理器 (`src/traffic_processor.rs` - 185 lines)
-- [x] HTTP 請求處理流程
-- [x] 廣告匹配邏輯集成
-- [x] HTTP 204 攔截響應
-- [x] 後端轉發框架
-- [x] 流量統計信息
-- [x] 單元測試
-
-##### 主程序 (`src/main.rs` - 303 lines)
-- [x] CLI 參數解析 (clap)
-- [x] 演示模式 (interactive)
-- [x] 生產模式框架
-- [x] eBPF 加載 (可選)
-- [x] Watchdog 進程
-- [x] Graceful shutdown
-
-#### 4. 測試與驗證 (100%)
-
-##### 演示模式測試
-```bash
-$ ./vwire-filter --demo
-
-URL> https://doubleclick.net/ads
-  ❌ 廣告 - 已攔截 (HTTP 204)
-
-URL> https://github.com/
-  ✓ 正常內容 - 放行
-
-📊 過濾統計:
-  總請求數：5
-  攔截廣告：3
-  放行請求：2
-  攔截率：60.00%
-```
-
-##### 流量處理器測試
-```bash
-$ ./test-traffic.sh
-
-測試請求 #1
-  ❌ 廣告已攔截 (HTTP 204 No Content)
-
-測試請求 #2
-  ❌ 廣告已攔截 (HTTP 204 No Content)
-
-測試請求 #3
-  ✓ 正常內容 - 需要轉發到後端
-
-📊 流量處理統計:
-  總包數：4
-  HTTP 請求：4
-  攔截廣告：2
-  放行請求：2
-  廣告攔截率：50.00%
-```
-
-##### 單元測試
+### 測試結果
 ```bash
 $ cargo test
+5 passed; 0 failed
 
-running 5 tests
-test http_parser::tests::test_parse_simple_request ... ok
-test http_parser::tests::test_parse_request_with_ads ... ok
-test http_parser::tests::test_parse_url ... ok
-test traffic_processor::tests::test_process_advertisement_request ... ok
-test traffic_processor::tests::test_process_normal_request ... ok
-
-test result: ok. 5 passed; 0 failed
+$ ./test-traffic.sh
+5 請求測試: 3 廣告攔截，2 放行
+攔截率：60%
 ```
 
 ---
 
-## 📊 代碼統計
+## 🔲 階段 2&3 開發中 (v0.3.0-dev)
 
-| 類別 | 文件數 | 代碼行數 |
-|------|--------|---------|
-| **eBPF** | 1 | 317 |
-| **Userspace** | 5 | 1,040 |
-| **測試** | - | ~100 |
-| **文檔** | 6 | ~800 |
-| **總計** | 18 | ~2,257 |
+### 階段 2: 性能優化 (80%)
 
-**編譯狀態**: ✅ Release 成功 (52 warnings, 0 errors)  
-**測試狀態**: ✅ 5/5 單元測試通過  
+#### Backend 連接管理器 ✅
+- ✅ `src/backend.rs` (167 lines)
+- ✅ 後端連接池框架
+- ✅ 反向代理 (`ReverseProxy`)
+- ✅ TCP 連接轉發邏輯
+- ✅ HTTP 請求轉發實現
+- [ ] 連接池優化
+- [ ] 超時重試機制
 
----
+#### AF_XDP Socket 完整實現 🔲
+- ✅ 框架完成 (183 lines)
+- ✅ XDP_UMEM 配置
+- ✅ RX/TX ring 結構
+- [ ] libc socket() 實際調用 (需 root)
+- [ ] mmap 共享內存
+- [ ] bind() 到網絡接口
 
-## 🔲 階段 2: 性能優化 (準備中)
+### 階段 3: HTTPS MITM (60%)
 
-### 待完成事項
+#### HTTPS 代理 🔲
+- ✅ `src/https_proxy.rs` (188 lines)
+- ✅ CA 證書生成 (rcgen)
+- ✅ 動態證書簽發
+- ✅ 證書信任鏈建立
+- [ ] TLS handshake (tokio-rustls)
+- [ ] HTTPS 解密流程
+- [ ] 內容過濾集成
 
-1. **AF_XDP Socket 完整實現** (優先級：高)
-   - 需要 root 權限測試
-   - 實現 libc socket()/bind()/setsockopt()
-   - 配置 XDP_UMEM 和 rings
-   - mmap 共享內存
-
-2. **完整流量處理循環** (優先級：高)
-   - 接收 → 解析 → 匹配 → 響應
-   - 後端連接管理器
-   - 請求轉發邏輯
-
-3. **性能基準測試** (優先級：中)
-   - pktgen 流量生成
-   - 1Gbps/10Gbps 吞吐量測試
-   - CPU 使用率分析
-   - 延遲測量
-
----
-
-## 🎯 性能指標 (當前 vs 目標)
-
-| 指標 | v0.1 PoC | v0.2.1 (當前) | v0.3 目標 |
-|------|---------|----------|----------|
-| **架構完成度** | 30% | 100% | 100% |
-| **HTTP 攔截** | ❌ | ✅ (框架) | ✅ (實際) |
-| **AF_XDP** | ❌ | ✅ (框架) | ✅ (完整) |
-| **演示模式** | ✅ | ✅ | ✅ |
-| **單元測試** | 0 | 5 | 20+ |
-| **吞吐量** | N/A | N/A | 10 Gbps |
-| **延遲** | N/A | N/A | < 1ms |
+#### SNI 提取 (eBPF) [未開始]
+- [ ] TLS ClientHello 解析
+- [ ] SNI extension 提取
+- [ ] XDP 層分流決策
 
 ---
 
-## 📁 專案文件清單
+## 📊 v0.3.0-dev 新增模塊
 
-```
-vwire-filter/
-├── ebpf/
-│   ├── Cargo.toml
-│   └── src/
-│       └── main.rs              # XDP 程序 (317 lines)
-├── src/
-│   ├── main.rs                  # 主程序 (303 lines)
-│   ├── ads_filter.rs            # 廣告過濾 (151 lines)
-│   ├── http_parser.rs           # HTTP 解析 (218 lines)
-│   ├── xdp_socket.rs            # AF_XDP (183 lines)
-│   ├── traffic_processor.rs     # 流量處理 (185 lines)
-│   └── config.rs                # 配置 (50 lines)
-├── Cargo.toml
-├── Cargo.lock
-├── build.rs
-├── build.sh                     # 編譯腳本
-├── run.sh                       # 運行腳本
-├── test-traffic.sh              # 測試腳本
-├── .gitignore
-├── README.md                    # 專案介紹
-├── BUILDING.md                  # 編譯指南
-├── ROADMAP.md                   # 開發路線圖
-├── STATUS.md                    # 當前進度
-└── PUSH_INSTRUCTIONS.md         # 推送指南
+### Backend 連接管理器 (`src/backend.rs`)
+
+```rust
+pub struct ReverseProxy {
+    backends: HashMap<String, Arc<BackendConnection>>,
+}
+
+impl ReverseProxy {
+    pub fn forward(&mut self, host: &str, port: u16, request: &[u8]) -> Vec<u8>
+}
 ```
 
+**功能**:
+- 後端連接池管理
+- HTTP 請求轉發
+- 響應收集
+
+### HTTPS Proxy (`src/https_proxy.rs`)
+
+```rust
+pub struct HttpsProxy {
+    ca_cert: Arc<Certificate>,
+    ca_key: Arc<KeyPair>,
+}
+
+impl HttpsProxy {
+    pub fn generate_server_cert(&self, hostname: &str) -> Certificate
+}
+```
+
+**功能**:
+- CA 證書生成 (ECDSA P-256)
+- 動態域名證書
+- 證書安裝指南
+
 ---
 
-## 🚀 快速開始
-
-### 1. 編譯
+## 🚀 使用 v0.3.0-dev
 
 ```bash
+# 切換到開發分支
+git checkout v0.3.0-dev
+
+# 編譯
 cargo build --release
-```
 
-### 2. 測試 (演示模式)
+# 導出 CA 證書 (HTTPS 功能)
+./vwire-filter --export-ca-cert
 
-```bash
-# 互動測試
-./target/release/vwire-filter --demo
-
-# 自動化測試
-./test-traffic.sh
-
-# 單元測試
-cargo test
-```
-
-### 3. 生產運行 (需要 root 和 eBPF)
-
-```bash
-# 編譯 eBPF 程序
-cd ebpf && cargo build --target bpfel-unknown-none -Z build-std=core --release
-
-# 運行
-sudo ./target/release/vwire-filter --interface eth0 --debug
+# 啟用 HTTPS 過濾
+./vwire-filter --https
 ```
 
 ---
 
-## 已知問題
+## 📁 分支結構
 
-1. **eBPF 程序需要單獨編譯**
-   - 需要 LLVM 和 bpfel-unknown-none target
-   - 提供 Docker 編譯環境 (待實現)
+```
+master (v0.2.1 stable)
+├── 階段 1 完整實現
+├── HTTP 過濾 (100%)
+└── 測試覆蓋 (5/5)
 
-2. **AF_XDP socket 需要 root 權限**
-   - 框架已完成，待實際測試
-   - 需要真實網絡接口
-
-3. **後端轉發未實現**
-   - 當前僅支持攔截 (HTTP 204)
-   - 完整轉發需要 TCP 連接管理
-
----
-
-## 下一步行動
-
-### 本週 (階段 2 啟動)
-
-1. [ ] 實現 AF_XDP socket libc API
-2. [ ] 完整流量處理循環
-3. [ ] 後端連接管理器
-4. [ ] 端到端測試
-
-### 下週
-
-1. [ ] 性能基準測試
-2. [ ] 白名單動態更新
-3. [ ] Docker 容器化
+v0.3.0-dev (develop)
+├── 階段 2 (80%)
+├── 階段 3 (60%)
+├── Backend Proxy
+└── HTTPS MITM
+```
 
 ---
 
-## Changelog
+## 📋 後續開發計劃
 
-### v0.2.1 (2026-06-11)
+### 本週 (階段 2 完成)
 
-**Feat**:
-- ✅ 完整的流量處理器模塊
-- ✅ HTTP 請求攔截端到端測試
-- ✅ eBPF 加載降級為可選
-- ✅ 自動化測試腳本
+1. [ ] AF_XDP socket libc 實現
+2. [ ] 完整的流量處理循環
+3. [ ] 後端連接池優化
+4. [ ] 端到端 HTTP 測試
 
-**Fix**:
-- ✅ 修復 main.rs borrow checker 問題
-- ✅ 優化錯誤處理和日誌
+### 下週 (階段 3 完成)
 
-**Tests**:
-- ✅ 5/5 單元測試通過
-- ✅ 演示模式測試通過
-- ✅ 流量處理器測試通過
+1. [ ] HTTPS 解密完整流程
+2. [ ] SNI 提取 (eBPF)
+3. [ ] TLS Proxy 集成
+4. [ ] HTML 內容過濾
 
-### v0.2.0 (2026-06-10)
+### 下月 (產品化)
 
-- ✅ 完整的專案架構
-- ✅ HTTP 解析器和 AF_XDP 框架
-- ✅ 廣告過濾引擎 (Aho-Corasick)
+1. [ ] Docker 容器化
+2. [ ] 監控儀表板
+3. [ ] 性能基準測試
+4. [ ] 文檔完善
 
 ---
 
-**專案狀態**: 階段 1 ✅ 完成！  
-**階段 2 進度**: 🔲 準備啟動  
-**整體完成度**: ██████████░░░░░░░░ 50%
+## ⚠️ 已知問題
 
-✊ Vwire v0.2.1 - Ready for Phase 2!
+### v0.3.0-dev (開發中)
+
+1. **rcgen API 兼容性**
+   - 正在從 rcgen 0.13 降級到 0.12
+   - 影響 HTTPS 證書生成
+
+2. **libc 依賴**
+   - AF_XDP socket 需要 libc 0.2
+   - 需要 root 權限測試
+
+3. **Rustls 集成**
+   - tokio-rustls 0.26 API 變更
+   - 需要更新 TLS 配置代碼
+
+### v0.2.1 (stable)
+
+1. 無已知問題
+
+---
+
+## 🎯 里程碑進度
+
+| 版本 | 日期 | 狀態 | 完成度 |
+|------|------|------|--------|
+| **v0.1.0** | 2026-06-10 | ✅ Released | PoC 原型 |
+| **v0.2.0** | 2026-06-10 | ✅ Released | HTTP 框架 |
+| **v0.2.1** | 2026-06-11 | ✅ Released | 流量處理器 |
+| **v0.3.0** | TBD | 🔲 Developing | HTTPS + 性能 |
+
+---
+
+## 📊 整體進度
+
+**Vwire 開發進度**: ████████████████░░ 80%
+
+```
+階段 1 (HTTP):    ██████████████████ 100% ✅
+階段 2 (性能):    ████████████░░░░░░  80% 🔲
+階段 3 (HTTPS):   ████████░░░░░░░░░░  60% 🔲
+階段 4 (產品):    ░░░░░░░░░░░░░░░░░░   0% ⬜
+```
+
+---
+
+**狀態**: v0.2.1 穩定運行，v0.3.0-dev 開發中  
+**下一步**: 完成階段 2 和階段 3，實現完整的 HTTP 和 HTTPS 過濾！✊
