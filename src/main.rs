@@ -2,6 +2,7 @@ mod ads_filter;
 mod config;
 mod http_parser;
 mod xdp_socket;
+mod traffic_processor;
 
 use anyhow::{Context, Result};
 use aya::BpfLoader;
@@ -14,6 +15,7 @@ use tokio::sync::{RwLock, Notify};
 use ads_filter::AdsFilterEngine;
 use config::Config;
 use http_parser::HttpParser;
+use traffic_processor::TrafficProcessor;
 
 /// Vwire 廣告過濾系統 - v0.2.0
 #[derive(Parser, Debug)]
@@ -61,13 +63,13 @@ async fn main() -> Result<()> {
     let filter_engine = Arc::new(RwLock::new(AdsFilterEngine::new(&config)?));
     let _http_parser = Arc::new(HttpParser::new());
     
-    // 加載並附加 eBPF 程序
-    load_and_attach_ebpf(&args.interface)?;
+    // 加載並附加 eBPF 程序 (可選)
+    if let Err(e) = load_and_attach_ebpf(&args.interface) {
+        warn!("  ⚠️  eBPF 程序加載失敗：{}", e);
+        warn!("  將使用降級模式 (僅演示/測試功能)");
+    }
     
     info!("📡 所有組件初始化完成");
-    info!("  ✓ 廣告過濾引擎");
-    info!("  ✓ HTTP 解析器");
-    info!("  ✓ XDP 程序 (接口：{})", args.interface);
 
     // 啟動 Watchdog
     let shutdown_notify = Arc::new(Notify::new());
@@ -84,12 +86,15 @@ async fn main() -> Result<()> {
         info!("");
         info!("📡 開始監聽並過濾 HTTP 流量...");
         
+        // 初始化流量處理器
+        let traffic_processor = Arc::new(RwLock::new(TrafficProcessor::new()));
+        
         // 嘗試創建 AF_XDP socket
         match xdp_socket::XdpSocket::new(&args.interface) {
             Ok(Some(_socket)) => {
                 info!("  ✓ AF_XDP socket 初始化成功");
-                warn!("⚠️  AF_XDP 流量處理邏輯開發中...");
-                // TODO: 啟動實際流量處理
+                // TODO: 啟動實際流量處理循環
+                // run_traffic_loop(socket, traffic_processor, filter_engine, shutdown_notify.clone()).await?;
             }
             Ok(None) => {
                 warn!("⚠️  AF_XDP socket 不可用，使用降級模式");
@@ -98,6 +103,9 @@ async fn main() -> Result<()> {
                 warn!("⚠️  AF_XDP socket 初始化失敗：{}", e);
             }
         }
+        
+        // 運行流量處理器測試
+        run_traffic_processor_test(traffic_processor, filter_engine).await?;
     }
 
     // 清理
@@ -235,4 +243,53 @@ async fn run_watchdog(shutdown: Arc<Notify>) {
     }
     
     info!("Watchdog: 已停止");
+}
+
+/// 運行流量處理器測試 (非 Demo 模式)
+async fn run_traffic_processor_test(
+    traffic_processor: Arc<RwLock<TrafficProcessor>>,
+    filter_engine: Arc<RwLock<AdsFilterEngine>>,
+) -> Result<()> {
+    info!("");
+    info!("📡 流量處理器測試模式");
+    info!("  測試 HTTP 請求攔截流程...");
+    info!("");
+    
+    // 模擬幾個 HTTP 請求
+    let test_requests = vec![
+        // 廣告請求
+        b"GET /ads/banner.jpg HTTP/1.1\r\nHost: adserver.com\r\n\r\n".as_slice(),
+        b"GET /get_ads?size=300x250 HTTP/1.1\r\nHost: doubleclick.net\r\n\r\n".as_slice(),
+        // 正常請求
+        b"GET /index.html HTTP/1.1\r\nHost: github.com\r\n\r\n".as_slice(),
+        b"GET /search?q=rust HTTP/1.1\r\nHost: google.com\r\n\r\n".as_slice(),
+    ];
+    
+    let mut processor = traffic_processor.write().await;
+    
+    for (i, request) in test_requests.iter().enumerate() {
+        info!("測試請求 #{}", i + 1);
+        
+        match processor.process_http_request(request, filter_engine.clone()).await {
+            Some(response) => {
+                // 已攔截
+                if response.starts_with(b"HTTP/1.1 204") {
+                    info!("  ❌ 廣告已攔截 (HTTP 204 No Content)");
+                } else {
+                    info!("  ❌ 廣告已攔截 (其他響應)");
+                }
+            }
+            None => {
+                info!("  ✓ 正常內容 - 需要轉發到後端");
+            }
+        }
+    }
+    
+    // 打印統計
+    processor.print_stats();
+    
+    info!("");
+    info!("流量處理器測試完成");
+    
+    Ok(())
 }
