@@ -148,6 +148,20 @@ impl HttpParser {
         format!("{}\r\n\r\n", response.to_string() + &headers)
             .into_bytes()
     }
+
+    /// 構造 HTTP 502 響應 (後端錯誤)
+    pub fn build_502_response() -> Vec<u8> {
+        let response = "HTTP/1.1 502 Bad Gateway\r\n";
+        let headers = [
+            "Content-Type: text/html",
+            "Content-Length: 0",
+            "Connection: close",
+            "X-Ad-Filter: error",
+        ].join("\r\n");
+        
+        format!("{}\r\n\r\n", response.to_string() + &headers)
+            .into_bytes()
+    }
 }
 
 /// 解析 URL 字符串 (用於演示模式)

@@ -3,6 +3,8 @@ mod config;
 mod http_parser;
 mod xdp_socket;
 mod traffic_processor;
+mod backend;
+mod https_proxy;
 
 use anyhow::{Context, Result};
 use aya::BpfLoader;
@@ -14,8 +16,8 @@ use tokio::sync::{RwLock, Notify};
 
 use ads_filter::AdsFilterEngine;
 use config::Config;
-use http_parser::HttpParser;
 use traffic_processor::TrafficProcessor;
+use https_proxy::HttpsProxy;
 
 /// Vwire 廣告過濾系統 - v0.2.0
 #[derive(Parser, Debug)]
@@ -36,6 +38,14 @@ struct Args {
     /// 演示模式 (不實際攔截)
     #[arg(long, default_value = "false")]
     demo: bool,
+
+    /// 導出 CA 證書
+    #[arg(long)]
+    export_ca_cert: bool,
+
+    /// 啟用 HTTPS 過濾
+    #[arg(long, default_value = "false")]
+    https: bool,
 }
 
 #[tokio::main]
@@ -52,16 +62,31 @@ async fn main() -> Result<()> {
         ).init();
     }
 
-    info!("🚀 啟動 Vwire 廣告過濾系統 v0.2.0");
+    info!("🚀 啟動 Vwire 廣告過濾系統 v0.3.0");
     info!("  網路接口：{}", args.interface);
     info!("  運行模式：{}", if args.demo { "演示模式" } else { "生產模式" });
+    if args.https {
+        info!("  HTTPS 過濾：已啟用");
+    }
+
+    // 檢查是否需要導出 CA 證書
+    if args.export_ca_cert {
+        export_ca_cert()?;
+        return Ok(());
+    }
 
     // 加載配置文件
     let config = load_config(args.config.as_deref())?;
     
     // 初始化組件
     let filter_engine = Arc::new(RwLock::new(AdsFilterEngine::new(&config)?));
-    let _http_parser = Arc::new(HttpParser::new());
+    
+    // 初始化 HTTPS 代理 (如果啟用)
+    let https_proxy = if args.https {
+        Some(HttpsProxy::new()?)
+    } else {
+        None
+    };
     
     // 加載並附加 eBPF 程序 (可選)
     if let Err(e) = load_and_attach_ebpf(&args.interface) {
@@ -70,6 +95,10 @@ async fn main() -> Result<()> {
     }
     
     info!("📡 所有組件初始化完成");
+    info!("  ✓ 廣告過濾引擎");
+    if https_proxy.is_some() {
+        info!("  ✓ HTTPS MITM 代理");
+    }
 
     // 啟動 Watchdog
     let shutdown_notify = Arc::new(Notify::new());
@@ -84,28 +113,13 @@ async fn main() -> Result<()> {
         run_demo_loop(filter_engine).await?;
     } else {
         info!("");
-        info!("📡 開始監聽並過濾 HTTP 流量...");
+        info!("📡 開始監聽並過濾 HTTP/HTTPS 流量...");
         
         // 初始化流量處理器
         let traffic_processor = Arc::new(RwLock::new(TrafficProcessor::new()));
         
-        // 嘗試創建 AF_XDP socket
-        match xdp_socket::XdpSocket::new(&args.interface) {
-            Ok(Some(_socket)) => {
-                info!("  ✓ AF_XDP socket 初始化成功");
-                // TODO: 啟動實際流量處理循環
-                // run_traffic_loop(socket, traffic_processor, filter_engine, shutdown_notify.clone()).await?;
-            }
-            Ok(None) => {
-                warn!("⚠️  AF_XDP socket 不可用，使用降級模式");
-            }
-            Err(e) => {
-                warn!("⚠️  AF_XDP socket 初始化失敗：{}", e);
-            }
-        }
-        
         // 運行流量處理器測試
-        run_traffic_processor_test(traffic_processor, filter_engine).await?;
+        run_traffic_processor_test(traffic_processor, filter_engine, https_proxy).await?;
     }
 
     // 清理
@@ -245,11 +259,36 @@ async fn run_watchdog(shutdown: Arc<Notify>) {
     info!("Watchdog: 已停止");
 }
 
+fn export_ca_cert() -> Result<()> {
+    let proxy = HttpsProxy::new()?;
+    let ca_pem = proxy.get_ca_cert_pem();
+    
+    let cert_path = "vwire-ca.crt";
+    std::fs::write(cert_path, ca_pem.as_bytes())?;
+    
+    info!("✅ CA 證書已導出到 {}", cert_path);
+    info!("");
+    https_proxy::print_ca_install_guide();
+    
+    Ok(())
+}
+
 /// 運行流量處理器測試 (非 Demo 模式)
 async fn run_traffic_processor_test(
     traffic_processor: Arc<RwLock<TrafficProcessor>>,
     filter_engine: Arc<RwLock<AdsFilterEngine>>,
+    https_proxy: Option<HttpsProxy>,
 ) -> Result<()> {
+    if let Some(_proxy) = https_proxy {
+        info!("");
+        info!("🔒 HTTPS MITM 測試模式");
+        info!("  CA 證書已生成");
+        info!("  支持動態證書生成和 HTTPS 解密");
+        info!("");
+        info!("⚠️  HTTPS 處理流程開發中... (階段 3)");
+        info!("");
+    }
+    
     info!("");
     info!("📡 流量處理器測試模式");
     info!("  測試 HTTP 請求攔截流程...");
