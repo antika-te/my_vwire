@@ -1,0 +1,48 @@
+# 編譯產物
+/target/
+*.o
+*.rlib
+*.lib
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Cargo 鎖文件
+Cargo.lock
+
+# 日誌文件
+*.log
+logs/
+
+# 證書文件
+vwire-ca.crt
+*.pem
+*.key
+
+# 配置文件
+config/
+*.toml
+
+# 臨時文件
+tmp/
+temp/
+*.tmp
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 測試文件
+test-traffic/
+captures/
+
+# 文檔構建
+docs/_build/
+docs/.doctrees/
+
+# Docker 相關
+docker-compose.override.yml

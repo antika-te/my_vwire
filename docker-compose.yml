@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  vwire-filter:
+    build: .
+    container_name: vwire-ad-filter
+    restart: unless-stopped
+    
+    # 網絡配置 - 使用 host 模式以支持 XDP
+    network_mode: host
+    
+    # 權限配置 - eBPF 需要 CAP_NET_ADMIN
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    
+    # 環境變量
+    environment:
+      - RUST_LOG=info
+      - VWIRE_INTERFACE=eth0
+      - VWIRE_MODE=production
+    
+    #  volumes
+    volumes:
+      # 配置文件
+      - ./config:/etc/vwire:ro
+      # 日誌目錄
+      - ./logs:/var/log/vwire
+      # CA 證書
+      - ./vwire-ca.crt:/etc/vwire/vwire-ca.crt:ro
+    
+    # 命令參數
+    command:
+      - "--interface=eth0"
+      - "--https"
+      - "--export-ca-cert=/etc/vwire/vwire-ca.crt"
+      - "--config=/etc/vwire/config.toml"
+    
+    # 資源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+    
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "pgrep", "vwire-filter"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 監控儀表板（可選）
+  vwire-dashboard:
+    image: nginx:alpine
+    container_name: vwire-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    depends_on:
+      - vwire-filter
+    networks:
+      - vwire-net
+    
+  # Redis 用於統計數據（可選）
+  vwire-redis:
+    image: redis:7-alpine
+    container_name: vwire-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - vwire-net
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  vwire-net:
+    driver: bridge
