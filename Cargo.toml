@@ -18,6 +18,8 @@ http-body-util = "0.1"
 bytes = "1.5"
 futures = "0.3"
 base64 = "0.22"
+redis = { version = "0.24", features = ["tokio-comp"] }
+uuid = { version = "1.6", features = ["v4"] }
 log = "0.4"
 env_logger = "0.10"
 clap = { version = "4.4", features = ["derive"] }
