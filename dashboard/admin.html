@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vwire 配置管理</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --success: #10b981;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f3f4f6;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+        }
+        
+        .navbar {
+            background: var(--primary);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar h1 {
+            font-size: 1.5rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .tab-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--light);
+        }
+        
+        .tab {
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: var(--light);
+        }
+        
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        .tab-content {
+            padding: 2rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        textarea {
+            min-height: 200px;
+            font-family: monospace;
+        }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        button.success {
+            background: var(--success);
+        }
+        
+        button.success:hover {
+            background: #059669;
+        }
+        
+        button.danger {
+            background: var(--danger);
+        }
+        
+        button.danger:hover {
+            background: #dc2626;
+        }
+        
+        .rules-list {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .rule-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--light);
+        }
+        
+        .rule-item:last-child {
+            border-bottom: none;
+        }
+        
+        .rule-domain {
+            font-family: monospace;
+            color: var(--primary);
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary), #764ba2);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>⚙️ Vwire 配置管理中心</h1>
+    </nav>
+    
+    <div class="container">
+        <!-- 統計卡片 -->
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-rules">0</div>
+                <div class="stat-label">廣告規則總數</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="whitelist-rules">0</div>
+                <div class="stat-label">白名單規則</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="blocked-today">0</div>
+                <div class="stat-label">今日攔截</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="uptime">0h</div>
+                <div class="stat-label">運行時間</div>
+            </div>
+        </div>
+        
+        <div class="tab-container">
+            <div class="tabs">
+                <div class="tab active" data-tab="rules">廣告規則</div>
+                <div class="tab" data-tab="whitelist">白名單</div>
+                <div class="tab" data-tab="settings">系統設置</div>
+                <div class="tab" data-tab="logs">日誌查看</div>
+            </div>
+            
+            <div class="tab-content">
+                <!-- 廣告規則 -->
+                <div id="rules-tab">
+                    <div class="alert alert-success">
+                        ✅ 配置已保存！上次更新：2026-06-12 03:00
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new-rule">添加新規則</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input 
+                                type="text" 
+                                id="new-rule" 
+                                placeholder="輸入廣告域名，例如：ads.example.com"
+                            >
+                            <button onclick="addRule()">添加</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>廣告規則列表 (共 <span id="rule-count">0</span> 條)</label>
+                        <div class="rules-list" id="rules-list">
+                            <!-- 動態生成 -->
+                        </div>
+                    </div>
+                    
+                    <button class="success" onclick="saveConfig()">💾 保存配置</button>
+                    <button class="danger" onclick="resetConfig()">🔄 重置為默認</button>
+                </div>
+                
+                <!-- 白名單 -->
+                <div id="whitelist-tab" style="display: none;">
+                    <div class="form-group">
+                        <label for="new-whitelist">添加白名單</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input 
+                                type="text" 
+                                id="new-whitelist" 
+                                placeholder="輸入信任域名，例如：api.trusted.com"
+                            >
+                            <button onclick="addWhitelist()">添加</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>白名單列表 (<span id="whitelist-count">0</span> 條)</label>
+                        <div class="rules-list" id="whitelist-list">
+                            <!-- 動態生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系統設置 -->
+                <div id="settings-tab" style="display: none;">
+                    <div class="form-group">
+                        <label for="interface">網絡接口</label>
+                        <select id="interface">
+                            <option value="eth0">eth0</option>
+                            <option value="eth1">eth1</option>
+                            <option value="ens33">ens33</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="xdp-mode">XDP 模式</label>
+                        <select id="xdp-mode">
+                            <option value="native">Native (推薦)</option>
+                            <option value="skb">SKB (兼容模式)</option>
+                            <option value="offload">Offload (硬件加速)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="log-level">日誌級別</label>
+                        <select id="log-level">
+                            <option value="error">Error</option>
+                            <option value="warn">Warning</option>
+                            <option value="info" selected>Info</option>
+                            <option value="debug">Debug</option>
+                            <option value="trace">Trace</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enable-https" checked>
+                            啟用 HTTPS 解密
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enable-backend" checked>
+                            啟用後端代理
+                        </label>
+                    </div>
+                    
+                    <button class="success" onclick="saveSettings()">💾 保存設置</button>
+                </div>
+                
+                <!-- 日誌查看 -->
+                <div id="logs-tab" style="display: none;">
+                    <div class="form-group">
+                        <label>實時日誌</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button onclick="refreshLogs()">🔄 刷新</button>
+                            <button onclick="downloadLogs()">📥 下載</button>
+                        </div>
+                        <textarea id="log-viewer" readonly>2026-06-12 03:00:00 INFO  Vwire 啟動
+2026-06-12 03:00:01 INFO  加載廣告規則：150 條
+2026-06-12 03:00:02 INFO  XDP 程序加載成功
+2026-06-12 03:00:05 INFO  攔截廣告：googleadservices.com
+2026-06-12 03:00:10 INFO  允許請求：www.google.com
+2026-06-12 03:00:15 INFO  HTTPS 解密：api.example.com
+                        </textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

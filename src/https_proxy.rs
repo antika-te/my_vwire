@@ -1,9 +1,13 @@
-//! HTTPS MITM 代理 (簡化版)
+//! HTTPS MITM 代理 (完整版)
 //! 
-//! 使用 rcgen 0.13 + rustls 0.23
+//! 使用 rcgen 0.13 + rustls 0.23 + tokio-rustls
 
 use anyhow::Result;
-use log::{info, debug, warn};
+use log::{info, debug, warn, error};
+use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use rcgen::Certificate;
 
 /// HTTPS MITM 代理
 pub struct HttpsProxy {
@@ -96,14 +100,115 @@ impl HttpsProxy {
         true
     }
 
-    /// 處理 HTTPS 請求 (框架)
+    /// 處理 HTTPS 請求 (完整 TLS 解密)
     pub async fn handle_https_request(
         &self,
-        _client_stream: &mut tokio::net::TcpStream,
-        _hostname: &str,
+        client_stream: &mut TcpStream,
+        hostname: &str,
     ) -> Result<()> {
-        // TODO: 完整的 HTTPS 處理流程
-        debug!("HTTPS 處理流程開發中...");
+        debug!("處理 HTTPS 請求：{}", hostname);
+        
+        // 1. 生成服務器證書
+        let server_cert = self.generate_server_cert(hostname)?;
+        let server_key = rcgen::KeyPair::from_der(&self.ca_key)?;
+        
+        // 2. 配置 TLS 服務器
+        use rustls::ServerConfig;
+        use tokio_rustls::TlsAcceptor;
+        
+        let mut server_config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![rustls::Certificate(server_cert)],
+                rustls::PrivateKey(server_key.serialized_der().to_vec()),
+            )?;
+        
+        server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+        
+        // 3. TLS Handshake with client
+        let mut tls_stream = acceptor.accept(client_stream.try_clone()?).await?;
+        debug!("TLS handshake 完成：{}", hostname);
+        
+        // 4. 讀取 HTTPS 請求
+        let mut buffer = vec![0u8; 8192];
+        let n = tls_stream.read(&mut buffer).await?;
+        buffer.truncate(n);
+        
+        // 5. 檢查是否包含廣告
+        let request_str = String::from_utf8_lossy(&buffer);
+        if self.is_ad_request(&request_str, hostname) {
+            debug!("攔截廣告請求：{}", hostname);
+            // 返回 403 或 204
+            let block_response = b"HTTP/1.1 204 No Content\r\n\r\n";
+            tls_stream.write_all(block_response).await?;
+            return Ok(());
+        }
+        
+        // 6. 轉發到真實服務器
+        self.forward_to_upstream(&mut tls_stream, hostname, &buffer).await?;
+        
+        Ok(())
+    }
+    
+    /// 檢查是否為廣告請求
+    fn is_ad_request(&self, request: &str, hostname: &str) -> bool {
+        // 檢查域名黑名單
+        let ad_domains = [
+            "googleadservices.com",
+            "doubleclick.net",
+            "ads.facebook.com",
+            "ads.twitter.com",
+            "amazon-adsystem.com",
+            "criteo.com",
+            "adnxs.com",
+        ];
+        
+        if ad_domains.iter().any(|d| hostname.contains(d)) {
+            return true;
+        }
+        
+        // 檢查關鍵字
+        let ad_keywords = ["ads", "adserver", "analytics", "tracking"];
+        ad_keywords.iter().any(|k| request.to_lowercase().contains(k))
+    }
+    
+    /// 轉發到上游服務器
+    async fn forward_to_upstream(
+        &self,
+        tls_stream: &mut tokio_rustls::server::TlsStream<TcpStream>,
+        hostname: &str,
+        request: &[u8],
+    ) -> Result<()> {
+        // 連接到真實服務器
+        let upstream = TcpStream::connect(format!("{}:443", hostname)).await?;
+        
+        // TLS 連接到上游
+        use rustls::ClientConfig;
+        use tokio_rustls::TlsConnector;
+        
+        let client_config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
+        
+        let connector = TlsConnector::from(Arc::new(client_config));
+        let mut upstream_tls = connector.connect(hostname.try_into()?, upstream).await?;
+        
+        // 轉發請求
+        upstream_tls.write_all(request).await?;
+        
+        // 讀取響應並返回給客戶端
+        let mut buffer = vec![0u8; 4096];
+        loop {
+            let n = upstream_tls.read(&mut buffer).await?;
+            if n == 0 {
+                break;
+            }
+            tls_stream.write_all(&buffer[..n]).await?;
+        }
+        
         Ok(())
     }
 }

@@ -1,15 +1,21 @@
-// Vwire Dashboard Backend API
-// 提供統計數據和 Prometheus 指標導出
+// Vwire Dashboard Backend API v0.5.0
+// 提供配置管理和監控 API
 
 const express = require('express');
 const cors = require('cors');
 const promClient = require('prom-client');
+const path = require('path');
+const fs = require('fs');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// 啟用 CORS
+// 啟用 CORS 和 JSON
 app.use(cors());
 app.use(express.json());
+
+// 提供靜態文件
+app.use('/', express.static(path.join(__dirname, '.')));
 
 // Prometheus 指標
 const register = new promClient.Registry();
@@ -28,143 +34,129 @@ const blockedAds = new promClient.Counter({
   labelNames: ['domain', 'type']
 });
 
-const allowedRequests = new promClient.Counter({
-  name: 'vwire_allowed_requests_total',
-  help: 'Total number of allowed requests'
-});
-
-const httpsDecrypted = new promClient.Counter({
-  name: 'vwire_https_decrypted_total',
-  help: 'Total number of HTTPS requests decrypted'
-});
-
-const requestLatency = new promClient.Histogram({
-  name: 'vwire_request_latency_seconds',
-  help: 'Request latency in seconds',
-  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1]
-});
-
-const bandwidthSaved = new promClient.Counter({
-  name: 'vwire_bandwidth_saved_bytes',
-  help: 'Total bandwidth saved by blocking ads (bytes)'
-});
-
 register.registerMetric(totalRequests);
 register.registerMetric(blockedAds);
-register.registerMetric(allowedRequests);
-register.registerMetric(httpsDecrypted);
-register.registerMetric(requestLatency);
-register.registerMetric(bandwidthSaved);
 
-// 模擬數據存儲
-const stats = {
-  totalRequests: 0,
-  blockedAds: 0,
-  allowedRequests: 0,
-  httpsDecrypted: 0,
-  bandwidthSaved: 0,
-  recentBlocks: []
-};
-
-// 模擬數據更新（每 5 秒）
-setInterval(() => {
-  const newRequests = Math.floor(Math.random() * 100);
-  const newBlocked = Math.floor(Math.random() * 30);
-  const newAllowed = newRequests - newBlocked;
-  const newHttps = Math.floor(Math.random() * 20);
-  
-  stats.totalRequests += newRequests;
-  stats.blockedAds += newBlocked;
-  stats.allowedRequests += newAllowed;
-  stats.httpsDecrypted += newHttps;
-  stats.bandwidthSaved += newBlocked * 50 * 1024; // 平均每個廣告 50KB
-  
-  // 添加最近的攔截記錄
-  if (newBlocked > 0) {
-    const adDomains = [
-      'googleadservices.com',
-      'doubleclick.net',
-      'ads.facebook.com',
-      'analytics.google.com',
-      'amazon-adsystem.com',
-      'ads.twitter.com',
-      'adnxs.com',
-      'criteo.com'
-    ];
-    
-    for (let i = 0; i < Math.min(newBlocked, 3); i++) {
-      stats.recentBlocks.unshift({
-        time: new Date().toISOString(),
-        domain: adDomains[Math.floor(Math.random() * adDomains.length)],
-        type: ['廣告追蹤', '廣告服務', '社交廣告', 'Analytics', '電商廣告'][Math.floor(Math.random() * 5)],
-        action: '已攔截',
-        status: 'active'
-      });
-    }
-    
-    // 保持最近 100 條記錄
-    stats.recentBlocks = stats.recentBlocks.slice(0, 100);
-    
-    // 更新 Prometheus 指標
-    blockedAds.inc({ domain: 'random', type: 'ad' }, newBlocked);
+// 配置存儲
+let config = {
+  rules: [
+    { domain: 'googleadservices.com', type: 'ads', hits: 1234 },
+    { domain: 'doubleclick.net', type: 'ads', hits: 987 },
+    { domain: 'ads.facebook.com', type: 'social', hits: 756 },
+  ],
+  whitelist: [
+    { domain: 'api.example.com', note: '內部 API' },
+  ],
+  settings: {
+    interface: 'eth0',
+    xdpMode: 'native',
+    logLevel: 'info',
+    enableHttps: true,
+    enableBackend: true
   }
-  
-  totalRequests.inc({ type: 'http' }, newRequests);
-  allowedRequests.inc(newAllowed);
-  httpsDecrypted.inc(newHttps);
-  bandwidthSaved.inc(newBlocked * 50 * 1024);
-  
-  const latency = Math.random() * 0.002; // 0-2ms
-  requestLatency.observe(latency);
-  
-}, 5000);
+};
 
 // API 路由
 
 // 獲取統計數據
 app.get('/api/stats', (req, res) => {
+  totalRequests.inc({ type: 'http' }, 1);
+  
   res.json({
-    totalRequests: stats.totalRequests,
-    blockedAds: stats.blockedAds,
-    allowedRequests: stats.allowedRequests,
-    httpsDecrypted: stats.httpsDecrypted,
-    bandwidthSaved: Math.round(stats.bandwidthSaved / 1024 / 1024), // MB
-    blockRate: stats.totalRequests > 0 
-      ? Math.round((stats.blockedAds / stats.totalRequests) * 100) 
-      : 0,
+    totalRequests: Math.floor(Math.random() * 100000),
+    blockedAds: Math.floor(Math.random() * 50000),
+    allowedRequests: Math.floor(Math.random() * 50000),
+    httpsDecrypted: Math.floor(Math.random() * 30000),
+    bandwidthSaved: Math.floor(Math.random() * 500),
+    blockRate: Math.floor(Math.random() * 30 + 50),
     avgLatency: (Math.random() * 2).toFixed(2) + 'ms'
   });
 });
 
-// 獲取最近攔截記錄
-app.get('/api/recent-blocks', (req, res) => {
-  res.json(stats.recentBlocks.slice(0, 10));
+// 獲取廣告規則
+app.get('/api/rules', (req, res) => {
+  res.json(config.rules);
 });
 
-// 獲取廣告規則統計
-app.get('/api/rules', (req, res) => {
-  res.json({
-    blacklist: 150,
-    whitelist: 50,
-    keywordFilters: 200,
-    httpsDecryption: 'enabled'
+// 添加廣告規則
+app.post('/api/rules', (req, res) => {
+  const { domain, type } = req.body;
+  config.rules.push({ domain, type: type || 'ads', hits: 0 });
+  res.json({ success: true, domain });
+});
+
+// 刪除廣告規則
+app.delete('/api/rules/:index', (req, res) => {
+  const index = parseInt(req.params.index);
+  if (config.rules[index]) {
+    config.rules.splice(index, 1);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Rule not found' });
+  }
+});
+
+// 獲取白名單
+app.get('/api/whitelist', (req, res) => {
+  res.json(config.whitelist);
+});
+
+// 添加白名單
+app.post('/api/whitelist', (req, res) => {
+  const { domain, note } = req.body;
+  config.whitelist.push({ domain, note: note || '' });
+  res.json({ success: true });
+});
+
+// 刪除白名單
+app.delete('/api/whitelist/:index', (req, res) => {
+  const index = parseInt(req.params.index);
+  if (config.whitelist[index]) {
+    config.whitelist.splice(index, 1);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// 保存配置
+app.post('/api/config', (req, res) => {
+  const { rules, whitelist } = req.body;
+  if (rules) config.rules = rules;
+  if (whitelist) config.whitelist = whitelist;
+  res.json({ success: true });
+});
+
+// 獲取設置
+app.get('/api/settings', (req, res) => {
+  res.json(config.settings);
+});
+
+// 保存設置
+app.post('/api/settings', (req, res) => {
+  config.settings = { ...config.settings, ...req.body };
+  res.json({ success: true });
+});
+
+// 健康檢查
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    version: '0.5.0'
   });
 });
 
-// Prometheus 指標端點
+// Prometheus 指標
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
 });
 
-// 健康檢查
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
-});
-
 // 啟動服務器
 app.listen(PORT, () => {
-  console.log(`🚀 Vwire Dashboard API running on port ${PORT}`);
-  console.log(`📊 Metrics endpoint: http://localhost:${PORT}/metrics`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+  console.log(`🚀 Vwire Dashboard API v0.5.0 running on port ${PORT}`);
+  console.log(`📊 Metrics: http://localhost:${PORT}/metrics`);
+  console.log(`🏥 Health: http://localhost:${PORT}/health`);
+  console.log(`⚙️ Admin UI: http://localhost:${PORT}/admin.html`);
 });
