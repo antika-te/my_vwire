@@ -1,0 +1,133 @@
+# Default values for vwire.
+# This is a YAML-formatted file.
+
+# 複製配置
+replicaCount: 1
+
+image:
+  repository: ghcr.io/antika-te/my_vwire
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# 圖像拉取秘鑰
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# 服務賬戶配置
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod 註解
+podAnnotations: {}
+
+# Pod 安全上下文
+podSecurityContext:
+  runAsNonRoot: false
+
+# 容器安全上下文
+securityContext:
+  privileged: true
+  capabilities:
+    add:
+      - NET_ADMIN
+      - SYS_ADMIN
+
+# 網絡配置
+network:
+  # 使用 hostNetwork 以支持 XDP
+  hostNetwork: true
+  hostPID: true
+  dnsPolicy: ClusterFirstWithHostNet
+
+# 服務配置
+service:
+  type: ClusterIP
+  metricsPort: 3001
+  dashboardPort: 3000
+
+# 資源限制
+resources:
+  limits:
+    cpu: "2000m"
+    memory: "512Mi"
+  requests:
+    cpu: "500m"
+    memory: "128Mi"
+
+# 自動伸縮
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# 卷配置
+volumes:
+  - name: config
+    configMap:
+      name: vwire-config
+  - name: logs
+    emptyDir: {}
+
+volumeMounts:
+  - name: config
+    mountPath: /etc/vwire
+    readOnly: true
+  - name: logs
+    mountPath: /var/log/vwire
+
+# 配置值
+config:
+  interface: "eth0"
+  xdpMode: "native"
+  enableHTTPS: true
+  logLevel: "info"
+  backendAddress: ""
+
+# 監控配置
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+    scrapeTimeout: 10s
+
+# 節點選擇
+nodeSelector: {}
+
+# 容忍度
+tolerations: []
+
+# 親和性
+affinity: {}
+
+# 更新策略
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# 健康檢查
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3001
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3001
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3

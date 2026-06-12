@@ -1,0 +1,18 @@
+apiVersion: v2
+name: vwire
+description: Vwire Ad Filter - eBPF/XDP based ad filtering system
+type: application
+version: 0.4.0
+appVersion: "0.4.0"
+keywords:
+  - ad-filter
+  - ebpf
+  - xdp
+  - network
+  - security
+home: https://github.com/antika-te/my_vwire
+sources:
+  - https://github.com/antika-te/my_vwire
+maintainers:
+  - name: Vwire Team
+    email: support@vwire.io

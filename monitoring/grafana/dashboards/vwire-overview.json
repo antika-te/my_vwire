@@ -1,0 +1,254 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "vwire-overview",
+    "title": "Vwire 廣告過濾器 - 總覽",
+    "tags": ["vwire", "ad-filter", "network"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "type": "stat",
+        "title": "總請求數",
+        "targets": [
+          {
+            "expr": "sum(rate(vwire_total_requests_total[5m]))",
+            "legendFormat": "req/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5000},
+                {"color": "red", "value": 10000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "type": "stat",
+        "title": "廣告攔截數",
+        "targets": [
+          {
+            "expr": "sum(rate(vwire_blocked_ads_total[5m]))",
+            "legendFormat": "blocked/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "type": "stat",
+        "title": "攔截率",
+        "targets": [
+          {
+            "expr": "sum(vwire_blocked_ads_total) / sum(vwire_total_requests_total) * 100",
+            "legendFormat": "{{value}}%"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null, "label": "正常"},
+                {"color": "yellow", "value": 30, "label": "偏低"},
+                {"color": "red", "value": 10, "label": "過低"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "type": "stat",
+        "title": "平均延遲",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(vwire_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "{{value}}ms"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.05},
+                {"color": "red", "value": 0.1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "type": "timeseries",
+        "title": "請求趨勢 (24 小時)",
+        "targets": [
+          {
+            "expr": "sum(rate(vwire_total_requests_total[5m]))",
+            "legendFormat": "總請求"
+          },
+          {
+            "expr": "sum(rate(vwire_blocked_ads_total[5m]))",
+            "legendFormat": "攔截請求"
+          },
+          {
+            "expr": "sum(rate(vwire_allowed_requests_total[5m]))",
+            "legendFormat": "允許請求"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "gradientMode": "none"
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "type": "piechart",
+        "title": "廣告類型分佈",
+        "targets": [
+          {
+            "expr": "sum by (type) (rate(vwire_blocked_ads_total[1h]))",
+            "legendFormat": "{{type}}"
+          }
+        ],
+        "options": {
+          "pieType": "pie",
+          "displayLabels": ["name", "value"],
+          "legend": {"displayMode": "table", "placement": "right"}
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+        "type": "table",
+        "title": "Top 10 廣告域名",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(vwire_blocked_ads_total[5m])) by (domain))",
+            "legendFormat": "{{domain}}"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "renameByName": {
+                "Value": "攔截次數",
+                "domain": "域名"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 20},
+        "type": "stat",
+        "title": "HTTPS 解密數",
+        "targets": [
+          {
+            "expr": "sum(rate(vwire_https_decrypted_total[5m]))",
+            "legendFormat": "decrypted/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 20},
+        "type": "stat",
+        "title": "節省帶寬",
+        "targets": [
+          {
+            "expr": "sum(vwire_bandwidth_saved_bytes)",
+            "legendFormat": "{{value}} B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 26},
+        "type": "timeseries",
+        "title": "P95/P99 延遲",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(vwire_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(vwire_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10
+            },
+            "unit": "s"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}
